@@ -22,8 +22,9 @@ def parse_page(html, url):
     text = soup.get_text(' ', strip=True)
     if any(s in text.casefold() for s in ('confirm you are human', 'verify you are human', 'security check before continuing', 'access denied')):
         raise ValueError('iCIMS blocked by a human-verification/access challenge')
-    header = soup.select_one('.iCIMS_SubHeader_Jobs')
-    match = re.search(r'Page\s+(\d+)\s+of\s+(\d+)', header.get_text(' ', strip=True) if header else '')
+    matches = [re.search(r'Page\s+(\d+)\s+of\s+(\d+)', h.get_text(' ', strip=True))
+               for h in soup.select('.iCIMS_SubHeader_Jobs')]
+    match = next((m for m in matches if m), None)
     if not match:
         # Explicit empty-board message only; never accept an arbitrary empty page.
         empty = soup.select_one('.iCIMS_NoJobs')

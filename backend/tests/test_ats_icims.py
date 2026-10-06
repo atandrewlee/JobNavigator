@@ -19,7 +19,7 @@ def test_explicit_empty_only():
     assert icims.parse_page('<div class="iCIMS_NoJobs">No jobs found</div>', URL)==([],1,1)
 
 def test_job_links_are_canonical():
-    jobs,current,total=icims.parse_page(page(),URL)
+    jobs,current,total=icims.parse_page('<p class="iCIMS_SubHeader_Jobs">Welcome</p>'+page(),URL)
     assert jobs == [{'title':'Cloud Engineer','url':'https://example.icims.com/jobs/1/engineer/job'}]
     assert (current,total)==(1,1)
 
