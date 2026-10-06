@@ -35,6 +35,9 @@ def detect_scrape_type(url: str) -> str:
     from backend.scraper.ats.smartrecruiters import is_smartrecruiters as _is_smartrecruiters
     from backend.scraper.ats.meta import is_meta as _is_meta_careers
     from backend.scraper.ats.google import is_google as _is_google_careers
+    from backend.scraper.ats.icims import is_icims
+    if is_icims(url):
+        return "iCIMS HTTP"
     if _is_workday(url):
         return "Workday API"
     if _is_oracle_hcm(url):
@@ -435,6 +438,7 @@ async def test_scrape_company(company_id: str, db: Session = Depends(get_db)):
         scrape as _scrape_google_careers,
     )
 
+    from backend.scraper.ats import icims
     urls = company.scrape_urls or []
     if not urls:
         raise HTTPException(status_code=400, detail="No scrape URLs configured")
@@ -451,6 +455,8 @@ async def test_scrape_company(company_id: str, db: Session = Depends(get_db)):
     body_phrases = load_exclusion_phrases(db) or []
 
     all_jobs = []
+    coverage = []
+    scrape_errors = []
     urls_scraped = []
     pw = None
     browser = None
@@ -467,6 +473,13 @@ async def test_scrape_company(company_id: str, db: Session = Depends(get_db)):
                 continue
             page = None
             try:
+                if icims.is_icims(target_url):
+                    jobs, rejected, proof = await icims.scrape(target_url, debug=True, max_pages=max_pages)
+                    all_jobs.extend(jobs)
+                    all_rejected.extend(rejected)
+                    coverage.append(proof)
+                    urls_scraped.append(f"{target_url} ({len(jobs)} found via iCIMS HTTP)")
+                    continue
                 # HTTP-based scrapers (no Playwright needed)
                 if _is_phenom_post(target_url):
                     jobs, rejected = await _scrape_phenom(target_url, debug=True)
@@ -550,6 +563,7 @@ async def test_scrape_company(company_id: str, db: Session = Depends(get_db)):
                 all_pagination_debug.extend(pag_debug)
                 urls_scraped.append(f"{target_url} ({len(jobs)} found, {len(rejected)} rejected)")
             except Exception as e:
+                scrape_errors.append({"url": target_url, "error": str(e)})
                 urls_scraped.append(f"{target_url[:80]}... (error: {e})")
             finally:
                 if page:
@@ -632,6 +646,8 @@ async def test_scrape_company(company_id: str, db: Session = Depends(get_db)):
         return {
             "company": company.name,
             "urls_scraped": urls_scraped,
+            "coverage": coverage,
+            "scrape_errors": scrape_errors,
             "screenshots": screenshots,
             "pagination_debug": all_pagination_debug,
             "include_expr": include_expr,
